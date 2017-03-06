@@ -77,7 +77,7 @@ int main (){
 		if ((Current_Pulse[count+8] == 0)&&(Previous_Pulses[count+8] == 1)){
 			pulses[count+8]++;
 		}
-        nanosleep(&SLEEP_TIME, NULL);
+        nanosleep(&PIN_SLEEP_TIME, NULL);
 		count++;
 	}
 }
@@ -107,7 +107,7 @@ void worker_thread(void)
             db.archive();
             pulses[count+8] = 0;
         }
-        nanosleep(&SLEEP_TIME, NULL);
+        nanosleep(&DB_SLEEP_TIME, NULL);
         count++;
     }
 }

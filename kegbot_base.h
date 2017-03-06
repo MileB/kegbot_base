@@ -23,11 +23,17 @@ const int END 		  = 6;
 const int NUM_METERS  = 16;
 
 // Timespec is SECONDS, NANOSECONDS
-const struct timespec SLEEP_TIME = {0, 10*1000};
+//const struct timespec SLEEP_TIME = {0, 10*1000};
 
 // When to write to the database
 // Ticks per gallon, in pints, per oz
 const int RESET_CONDITION = (10300.0 / 8.0 / 16.0); 
+
+// (1 / max frequency of low meter) / 2 / 8 (in seconds) * 1000000 (in nano-seconds)
+const int PIN_RATE = (1/343/2/8 * 1000000);
+
+const struct timespec PIN_SLEEP_TIME = {0, PIN_RATE};
+const struct timespec DB_SLEEP_TIME = {0, RESET_CONDITION*PIN_RATE};
 
 //-----------------
 //    OBJECTS

@@ -1,6 +1,9 @@
 #include "config_parser.h"
 #include <iostream>
 
+/* Helper function 
+ * Strips all whitespace
+ * characters out of str */
 void strip(string& str);
 
 config_parser::config_parser()
@@ -51,6 +54,7 @@ void config_parser::fill_dict(const char* filename)
   }
 }
 
+/* Helper function */
 void strip(string& str)
 {
   string::iterator i = str.begin();
@@ -73,6 +77,7 @@ bool config_parser::getInt (int& value, const string& key)
   if (iter == m_dict.end())
     return false;
 
+  /* Got our key, return its paired value */
   value = std::stoi(iter->second);
   return true;
 }
@@ -86,6 +91,7 @@ bool config_parser::getDouble (double& value, const string& key)
   if (iter == m_dict.end())
     return false;
 
+  /* Got our key, return its paired value */
   value = std::stod(iter->second);
   return true;
 }
@@ -99,5 +105,7 @@ bool config_parser::getString (string& value, const string& key)
   if (iter == m_dict.end())
     return false;
 
+  /* Got our key, return its paired value */
   value = iter->second;
+  return true;
 }

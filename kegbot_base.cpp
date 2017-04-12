@@ -96,7 +96,6 @@ void worker_thread(void)
             printf("Previous_Pulses[%d]: %d\n", count, pulses[count]);			
             db.add(count, pulses[count]);
             db.update();
-            db.archive();
             pulses[count] = 0;
         }
         /* Print out pulses from second Mutex's index */
@@ -104,10 +103,11 @@ void worker_thread(void)
             printf("Previous_Pulses[%d]: %d\n", count+8, pulses[count+8]);
             db.add(count+8, pulses[count+8]);
             db.update();
-            db.archive();
             pulses[count+8] = 0;
         }
-        nanosleep(&DB_SLEEP_TIME, NULL);
+        db.archive();
+        nanosleep(db.sleep_time(), NULL);
+        //nanosleep(&DB_SLEEP_TIME, NULL);
         count++;
     }
 }

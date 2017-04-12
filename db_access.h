@@ -11,10 +11,21 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "config_parser.h"
+#include "base64.h"
+
+static const double DEFAULT_FLOW_TPG = 10313.0;
+
 class db_access{
     public:
-        /* TODO: Take pass in as a hash somehow if possible so that we aren't storing cleartext passes */
-        db_access(const char* db, const char* user, const char* pass, unsigned int num_taps);
+        struct flow_meter
+        {
+            int ticks=0;
+            double tpg=DEFAULT_FLOW_TPG;
+            int update_ticks=0;
+        };
+
+        db_access(const char* filename);
         ~db_access();
 
         /* TODO: Error Handling based on MySQL conn status, return bool maybe? */
@@ -55,8 +66,14 @@ class db_access{
         void print();
 
     private:
-        int* m_flow_ticks;
+        bool init_mysql(const char* host, const char* database,
+                           const char* user, const char* pass );
+        int UPDATE_THRESHOLD_TICKS;
+        //int* m_flow_ticks;
+        //double* m_flow_tpg;
         unsigned int m_num_taps;
+        flow_meter* m_flow_meters;
+        config_parser m_config;
         sql::Driver*        m_driver;
         sql::Connection*    m_conn;
         sql::Statement*     m_stmt;

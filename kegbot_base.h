@@ -19,7 +19,7 @@ const int M0          = 17;
 const int M1          = 27;
 const int M2          = 22;
 const int RESET       = 5;
-const int END 		  = 6;
+const int END 		    = 6;
 const int NUM_METERS  = 16;
 
 // Timespec is SECONDS, NANOSECONDS
@@ -30,7 +30,7 @@ const int NUM_METERS  = 16;
 const int RESET_CONDITION = (10300.0 / 8.0 / 16.0); 
 
 // (1 / max frequency of low meter) / 2 / 8 (in seconds) * 1000000 (in nano-seconds)
-const int PIN_RATE = (1/343/2/8 * 1000000);
+const int PIN_RATE = (1.0/343.0/2.0/8.0 * 1000000.0);
 
 const struct timespec PIN_SLEEP_TIME = {0, PIN_RATE};
 const struct timespec DB_SLEEP_TIME = {0, RESET_CONDITION*PIN_RATE};

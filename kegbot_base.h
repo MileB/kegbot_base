@@ -13,11 +13,11 @@
 //    CONSTANTS
 //----------------
 // BCM GPIO 
-const int Flow_Meter1 = 23;
-const int Flow_Meter2 = 24; 
-const int M0          = 17;
-const int M1          = 27;
-const int M2          = 22;
+const int Flow_Meter1 = 19;
+const int Flow_Meter2 = 25; 
+const int M0          = 22;
+const int M1          = 23;
+const int M2          = 24;
 const int RESET       = 5;
 const int END 		    = 6;
 const int NUM_METERS  = 16;

@@ -91,23 +91,17 @@ void worker_thread(void)
 		if (count > 7){
 			count = 0;
 		}
-        /* Print out pulses from first Mutex's index */
-        if (pulses[count] >= RESET_CONDITION){
-            printf("Previous_Pulses[%d]: %d\n", count, pulses[count]);			
-            db.add(count, pulses[count]);
-            db.update();
-            pulses[count] = 0;
-        }
-        /* Print out pulses from second Mutex's index */
-        if (pulses[count+8] >= RESET_CONDITION){
-            printf("Previous_Pulses[%d]: %d\n", count+8, pulses[count+8]);
-            db.add(count+8, pulses[count+8]);
-            db.update();
-            pulses[count+8] = 0;
-        }
+        db.add(count, pulses[count]);
+        db.add(count+8, pulses[count+8]);
+
+        db.update();
+
+        pulses[count] = 0;
+        pulses[count+8] = 0;
+
         db.archive();
-        nanosleep(db.sleep_time(), NULL);
-        //nanosleep(&DB_SLEEP_TIME, NULL);
+        //nanosleep(db.sleep_time(), NULL);
+        nanosleep(&DB_SLEEP_TIME, NULL);
         count++;
     }
 }

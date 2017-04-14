@@ -143,6 +143,7 @@ bool db_access::update()
         /* Update flow meters if they've accrued enough ticks */
         if(m_flow_meters[i].ticks > m_flow_meters[i].update_ticks)
         {
+            printf("Flow meter %d at ticks %d \n", i+1, m_flow_meters[i].ticks);
             /* SET ticks = ticks + m_flow_ticks[i] */
             m_pushactive->setInt(1, m_flow_meters[i].ticks);
 

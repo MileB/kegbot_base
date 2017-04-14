@@ -20,6 +20,7 @@ db_access::db_access(const char* filename)
         printf("db_access::db_access: Error: No key \"database\" Found!\n");
         success = false;
     }
+    printf("In db constructor\n");
 
     if(!m_config.getString(host, "host")) {
         printf("db_access::db_access: Error: No key \"host\" Found!\n");
@@ -208,7 +209,7 @@ bool db_access::archive()
     int ticks;
     int ontap;
     std::string name;
-    sql::ResultSet* temp;
+    sql::ResultSet* temp=NULL;
     double volremaining;
     double volgone;
     double totalvol;
@@ -249,7 +250,9 @@ bool db_access::archive()
         m_pusharchive->execute();
     }
 
-    delete temp;
+    if(temp != NULL)
+        delete temp;
+
     return true;
 }
 

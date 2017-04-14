@@ -6,13 +6,9 @@
  * characters out of str */
 void strip(string& str);
 
-config_parser::config_parser()
-{
-  int a;
-}
-
 config_parser::config_parser(const char* filename)
 {
+  printf("In constructor...");
   fill_dict(filename);
 }
 

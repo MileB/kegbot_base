@@ -1,20 +1,24 @@
 
 TARGET=kegbot_base
 CXX=g++
-LXXFLAGS= `mysql_config --libs` -lmysqlcppconn
-CXXFLAGS=-Wall -g  -std=c++11 -pthread `mysql_config --cflags` -I/usr/include/cppconn
-ALLOBJ=db_access.o db_test.o config_parser.o base64.o
+
+LXXFLAGS=-lwiringPi -lwiringPiDev `mysql_config --libs` -lmysqlcppconn
+CXXFLAGS=-Wall -g -std=c++11 -pthread `mysql_config --cflags` -I/usr/include/cppconn
+ALLOBJ=kegbot_base.o db_access.o config_parser.o base64.o
 
 $(TARGET).out: $(ALLOBJ)
 	$(CXX) $(ALLOBJ) $(LXXFLAGS) -o $(TARGET).out
 
-$(TARGET).o: $(TARGET).cpp
+$(TARGET).o: $(TARGET).cpp db_access.o
 	$(CXX) $(CXXFLAGS) -c $(TARGET).cpp
 
 db_access.o: db_access.cpp config_parser.o base64.o
 
-db_test.o:	db_test.cpp db_access.o
+config_parser.o: config_parser.cpp
 
+base_64.o: base64.cpp
+
+kegbot_base.o: kegbot_base.cpp db_access.o
 
 .PHONY: clean cleaner
 

@@ -10,7 +10,6 @@ using std::unordered_map;
 
 class config_parser{
     public:
-      config_parser();
       config_parser(const char* filename);
 
       /* Func: getInt, getDouble, getString

@@ -23,7 +23,7 @@ const int END 		    = 6;
 const int NUM_METERS  = 16;
 
 // Timespec is SECONDS, NANOSECONDS
-//const struct timespec SLEEP_TIME = {0, 10*1000};
+const struct timespec SLEEP_TIME = {0, 10*1000};
 
 // When to write to the database
 // Ticks per gallon, in pints, per oz
@@ -38,8 +38,7 @@ const struct timespec DB_SLEEP_TIME = {0, RESET_CONDITION*PIN_RATE};
 //-----------------
 //    OBJECTS
 //----------------
-// TODO: Set this as a hashed password
-db_access db = db_access("kegbot", "root", "kegbot123", NUM_METERS);
+db_access db = db_access("./kegbot.cfg");
 
 //-----------------
 //    FUNCTIONS

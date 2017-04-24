@@ -58,6 +58,8 @@ int main (){
         digitalWrite(M1, count & 0x02);
         digitalWrite(M2, count & 0x04);
 
+        nanosleep(&PIN_SLEEP_TIME, NULL);
+
         /* Check store last pulse results in previous pulse
          * Used to find edges of the signals */
 		Previous_Pulses[count] = Current_Pulse[count];
@@ -77,7 +79,6 @@ int main (){
 		if ((Current_Pulse[count+8] == 0)&&(Previous_Pulses[count+8] == 1)){
 			pulses[count+8]++;
 		}
-        nanosleep(&PIN_SLEEP_TIME, NULL);
 		count++;
 	}
 }

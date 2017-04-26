@@ -248,10 +248,11 @@ bool db_access::archive()
         m_pusharchive->setDouble(4, volremaining);
 
         m_pusharchive->execute();
+
+        if(temp != NULL)
+            delete temp;
     }
 
-    if(temp != NULL)
-        delete temp;
 
     return true;
 }

@@ -193,11 +193,15 @@ void db_access::print()
         std::cout << " size: " << m_res->getString("size");
         std::cout << "\n";
     }
+    if (m_res != NULL)
+        delete m_res;
 }
 
 bool db_access::clear_db()
 {
     m_res = m_stmt->executeQuery("UPDATE active SET ticks = 0");
+    if (m_res != NULL)
+        delete m_res;
     return true;
 }
 
@@ -252,6 +256,8 @@ bool db_access::archive()
         if(temp != NULL)
             delete temp;
     }
+    if (m_res != NULL)
+        delete m_res;
 
 
     return true;

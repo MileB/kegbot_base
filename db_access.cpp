@@ -105,16 +105,18 @@ bool db_access::init_mysql(const char* host, const char* database,
     m_conn = m_driver->connect(host, user, pass);
     m_conn->setSchema(database);
 
-    m_pushactive = m_conn->prepareStatement("UPDATE active SET ticks=ticks+?,"
-                                       " dirty=1 WHERE ontap = ?");
+    /* TODO: Describe this. */
+    m_pushactive = m_conn->prepareStatement("UPDATE active "
+                                        "SET ticks=ticks+?, "
+                                        "dirty=1, "
+                                        "volremaining=(41+size*83)-(ticks*8.0/?)"
+                                        "WHERE ontap = ?");
 
-
+    /* TODO: Describe this. */
     m_pusharchive = m_conn->prepareStatement("INSERT INTO archive"
                                        " (name, ontap, size, volremaining) VALUES"
                                        " (?, ?, ?, ?)");
     
-    m_getname = m_conn->prepareStatement("SELECT name FROM stock WHERE ontap=?");
-
     m_stmt = m_conn->createStatement();
 }
 db_access::~db_access()
@@ -122,7 +124,6 @@ db_access::~db_access()
     delete(m_conn);
     delete(m_pushactive);
     delete(m_pusharchive);
-    delete(m_getname);
     delete(m_stmt);
     delete(m_res);
     delete(m_flow_meters);
@@ -137,6 +138,19 @@ bool db_access::add(unsigned int tap, int value)
     m_flow_meters[tap].ticks += value;
     return true;
 }
+
+/*
+ *
+    m_pushactive = m_conn->prepareStatement("UPDATE active "
+                                        "SET ticks=ticks+?, "
+                                        "dirty=1, "
+                                        "volremaining=(41+size*83)-(ticks*8.0/?)"
+                                        "WHERE ontap = ?");
+ *
+ */
+
+
+
 bool db_access::update()
 {
     for(unsigned int i = 0; i < m_num_taps; i++)
@@ -144,12 +158,21 @@ bool db_access::update()
         /* Update flow meters if they've accrued enough ticks */
         if(m_flow_meters[i].ticks > m_flow_meters[i].update_ticks)
         {
+            /* TODO: Delete debug statements */
             printf("Flow meter %d at ticks %d \n", i, m_flow_meters[i].ticks);
-            /* SET ticks = ticks + m_flow_ticks[i] */
+
+            /* SET ticks = ticks + ? */
+            /* Update ticks to add the new value accumulated */
             m_pushactive->setInt(1, m_flow_meters[i].ticks);
 
+            /* SET volremaining=(41+size*83)-(ticks*8.0/?) */
+            /* Update volremaining to be ...
+             * totalvolume (41 or 124 pints) - (Pints counted from ticks) */
+            m_pushactive->setInt(2, m_flow_meters[i].tpg);
+
             /* WHERE tap = i+1 */
-            m_pushactive->setInt(2, i+1);
+            /* C-code stores these as 0-indexed, [15:0] but db has [16:1] */
+            m_pushactive->setInt(3, i+1);
 
             /* Sets dirty bit on any values updated */
             m_pushactive->execute();
@@ -187,10 +210,12 @@ void db_access::print()
     m_res = m_stmt->executeQuery("SELECT * FROM active");
     while(m_res->next())
     {
-        std::cout << "sensor: " << m_res->getString("sensor");
         std::cout << " ontap: " << m_res->getString("ontap");
+        std::cout << " name: " << m_res->getString("name");
         std::cout << " ticks: " << m_res->getString("ticks");
         std::cout << " size: " << m_res->getString("size");
+        std::cout << " volremaining: " << m_res->getString("volremaining");
+        std::cout << " dirty: " << m_res->getString("dirty");
         std::cout << "\n";
     }
     if (m_res != NULL)
@@ -208,43 +233,19 @@ bool db_access::clear_db()
 bool db_access::archive()
 {
     /* Push to archive those that have been marked as dirty */
-    m_res = m_stmt->executeQuery("SELECT ontap,ticks,size FROM active WHERE dirty=1");
-    int size;
-    int ticks;
+    m_res = m_stmt->executeQuery("SELECT ontap,name,ticks,size, volremaining FROM active WHERE dirty=1");
     int ontap;
     std::string name;
-    sql::ResultSet* temp=NULL;
+    int ticks;
+    int size;
     double volremaining;
-    double volgone;
-    double totalvol;
     while(m_res->next())
     {
-        size = m_res->getInt("size");
-        ticks = m_res->getInt("ticks");
         ontap = m_res->getInt("ontap");
-        
-        /* If there have been no ticks, do not report it */
-        /* Sixtel */
-        if(size == 0)
-            totalvol = 41; /* In pints */
-        /* Half barrel */
-        else
-            totalvol = 124; /* In pints */
-
-        /* TODO: CHECK THIS MATH */
-        volgone = (ticks * 8.0) / m_flow_meters[ontap-1].tpg; /* In pints */
-        volremaining = totalvol - volgone;             /* In pints */
-
-        /* Set archive beer's name using ontap as a reference */
-        m_getname->setInt(1, ontap);
-        temp = m_getname->executeQuery();
-
-        /* Get name if there's a valid ontap */
-        if(temp->next())
-            name = temp->getString("name");
-        /* Not a valid name set up for this beer! */
-        else
-            name = "NO NAME NO TAP";
+        name = m_res->getString("name");
+        ticks = m_res->getInt("ticks");
+        size = m_res->getInt("size");
+        volremaining = m_res->getDouble("volremaining");
 
         m_pusharchive->setString(1, name);
         m_pusharchive->setInt(2, ontap);
@@ -252,9 +253,6 @@ bool db_access::archive()
         m_pusharchive->setDouble(4, volremaining);
 
         m_pusharchive->execute();
-
-        if(temp != NULL)
-            delete temp;
     }
     if (m_res != NULL)
         delete m_res;

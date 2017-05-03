@@ -1,8 +1,6 @@
 /**************************
  * CMPE-450/CMPE-451 - KEGBOT
- * MUX_TEST - Used for PoC 
- *  of testing multiplexers
- *  with 16 total inputs.
+ * KEGBOT_BASE 
  *
  *  Michael Byers
  *  Kyle    Henry
@@ -20,7 +18,15 @@ int Current_Pulse[NUM_METERS]   = {0};
  * all possible control signals */
 uint8_t count;
 
+bool shutdown;
+
 int main (){
+
+  /* Set up CTRL+C sigint interrupt handler */
+  shutdown = false;
+  if (signal(SIGINT, sig_handler) == SIG_ERR)
+    printf("WARNING! Cannot catch SIGINT. CTRL+C will not flush ticks before exit\n");
+
 	wiringPiSetupGpio();
 
     /* Setup flow meters and internal pull-up */
@@ -45,7 +51,7 @@ int main (){
 
     std::thread worker(worker_thread);
 
-	while(true){
+	while(!shutdown){
 
         /* Overflow, reset count */
 		if (count > 7){
@@ -81,12 +87,26 @@ int main (){
 		}
 		count++;
 	}
+
+  return 0;
+}
+
+void sig_handler(int signo)
+{
+  if (signo == SIGINT)
+  {
+    printf("SIGINT Caught, flushing ticks\n");
+    db.update(true);
+    db.archive();
+    printf("Finished flushing database, shutting down\n");
+    shutdown = true;
+  }
 }
 
 void worker_thread(void)
 {
     uint8_t count=0;
-    while(true)
+    while(!shutdown)
     {
         /* Overflow, reset count */
 		if (count > 7){
@@ -95,7 +115,7 @@ void worker_thread(void)
         db.add(count, pulses[count]);
         db.add(count+8, pulses[count+8]);
 
-        db.update();
+        db.update(false);
 
         pulses[count] = 0;
         pulses[count+8] = 0;

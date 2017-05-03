@@ -35,8 +35,10 @@ class db_access{
 
         /* Func: update
          * Updates DB with all accrue'd flow ticks 
-         * Then zero's out local flow ticks array */
-        bool update();
+         * Then zero's out local flow ticks array 
+         * Unless force is set the ticks must be
+         * above a threshold to update */
+        bool update(bool force);
 
         /* Func: clear
          * Sets accrued flow ticks of one local index
@@ -80,7 +82,6 @@ class db_access{
         sql::ResultSet*     m_res;
         sql::PreparedStatement* m_pushactive;
         sql::PreparedStatement* m_pusharchive;
-        sql::PreparedStatement* m_getname;
 };
 
 #endif

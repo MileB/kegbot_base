@@ -2,6 +2,7 @@
 #define KEGBOT_BASE_H
 
 #include <stdio.h>
+#include <signal.h>
 #include <wiringPi.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -51,5 +52,7 @@ db_access db = db_access("./kegbot.cfg");
 *  Updates the active database in the background
 */
 void worker_thread(void);
+
+void sig_handler(void);
 
 #endif

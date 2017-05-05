@@ -34,7 +34,6 @@ const int RESET_CONDITION = (10300.0 / 8.0 / 16.0);
 const int PIN_RATE = (1.0/343.0/2.0/8.0 * 1000000.0);
 
 const struct timespec PIN_SLEEP_TIME = {0, PIN_RATE};
-const struct timespec DB_SLEEP_TIME = {0, RESET_CONDITION*PIN_RATE};
 
 //-----------------
 //    OBJECTS
@@ -45,13 +44,9 @@ db_access db = db_access("./kegbot.cfg");
 //    FUNCTIONS
 //----------------
 
-/* Func: worker_thread
-*  Inputs: none
-*  Outputs: none
-*  Worker thread to run for the life of the main program
-*  Updates the active database in the background
-*/
-void worker_thread(void);
+/* TODO: Comment these */
+void active_thread(void);
+void archive_thread(void);
 
 void sig_handler(int);
 

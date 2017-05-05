@@ -53,6 +53,6 @@ db_access db = db_access("./kegbot.cfg");
 */
 void worker_thread(void);
 
-void sig_handler(void);
+void sig_handler(int);
 
 #endif

@@ -10,11 +10,17 @@
 
 #include <string.h>
 #include <unistd.h>
+#include <math.h>
+#include <time.h>
 
 #include "config_parser.h"
 #include "base64.h"
 
-static const double DEFAULT_FLOW_TPG = 10313.0;
+static const double DEFAULT_FLOW_TPG      = 10313.0;
+static const double DEFAULT_UPDATE_OZ     = 1.0;
+static const double DEFAULT_ACTIVE_RATE   = 1.0;
+static const double DEFAULT_ARCHIVE_RATE  = 30.0;
+static const double NS_TO_S  = 1000000000.0;
 
 class db_access{
     public:
@@ -67,15 +73,19 @@ class db_access{
          * Also works as a simple example for fetching values */
         void print();
 
+        /* TODO: Write these */
+        timespec get_archive_rate() { return m_archive_rate; }
+        timespec get_active_rate()  { return m_active_rate;  }
+
     private:
         bool init_mysql(const char* host, const char* database,
                            const char* user, const char* pass );
-        int UPDATE_THRESHOLD_TICKS;
-        //int* m_flow_ticks;
-        //double* m_flow_tpg;
-        unsigned int m_num_taps;
-        flow_meter* m_flow_meters;
-        config_parser m_config;
+        int                 UPDATE_THRESHOLD_TICKS;
+        unsigned int        m_num_taps;
+        struct timespec     m_archive_rate;
+        struct timespec     m_active_rate;
+        flow_meter*         m_flow_meters;
+        config_parser       m_config;
         sql::Driver*        m_driver;
         sql::Connection*    m_conn;
         sql::Statement*     m_stmt;

@@ -69,13 +69,12 @@ db_access::db_access(const char* filename)
         m_flow_meters = new flow_meter[num_taps];
 
         /* Grab update_oz to determine ticks necessary to push an update
-         * If we don't find one, use default of 1.0.
-         * TODO: Make this set as a static const in the class for pretty */
+         * If we don't find one, use default of 1.0. */
         double update_oz;
         if(!m_config.getDouble(update_oz, "update_oz"))
         {
-            printf("Note: update_oz unset, using default 1.0\n");
-            update_oz = 1.0;
+            printf("Note: update_oz unset, using default %.2f\n", DEFAULT_UPDATE_OZ);
+            update_oz = DEFAULT_UPDATE_OZ;
         }
 
         /* Iterate through the config file (1-indexed)
@@ -95,6 +94,22 @@ db_access::db_access(const char* filename)
           /* TODO: Make sure this is being honored correctly */
           m_flow_meters[i-1].update_ticks = tpg * update_oz / 128.0;
         }
+
+        /* Grab times for active/archive update pushes */
+        double active_rate  = DEFAULT_ACTIVE_RATE;
+        double archive_rate = DEFAULT_ARCHIVE_RATE;
+        if(!m_config.getDouble(active_rate, "active_rate")) {
+            printf("Note: active_rate unset, using default %.2f\n", 
+                DEFAULT_ACTIVE_RATE);
+        }
+        if(!m_config.getDouble(archive_rate, "archive_rate")) {
+            printf("Note: archive_rate unset, using default %.2f\n", 
+                DEFAULT_ARCHIVE_RATE);
+        }
+        m_active_rate.tv_sec    = static_cast<time_t> ((int)active_rate);
+        m_active_rate.tv_nsec   = static_cast<long>   (fmod(active_rate, 1) * NS_TO_S);
+        m_archive_rate.tv_sec   = static_cast<time_t> ((int)active_rate);
+        m_archive_rate.tv_nsec  = static_cast<long>   (fmod(archive_rate, 1) * NS_TO_S);
     }
 }
 
@@ -118,6 +133,7 @@ bool db_access::init_mysql(const char* host, const char* database,
                                        " (?, ?, ?, ?)");
     
     m_stmt = m_conn->createStatement();
+    return true;
 }
 db_access::~db_access()
 {
@@ -151,12 +167,13 @@ bool db_access::add(unsigned int tap, int value)
 
 
 
-bool db_access::update()
+bool db_access::update(bool force)
 {
     for(unsigned int i = 0; i < m_num_taps; i++)
     {
         /* Update flow meters if they've accrued enough ticks */
-        if(m_flow_meters[i].ticks > m_flow_meters[i].update_ticks)
+        if( (force && m_flow_meters[i].ticks > 0)
+            || m_flow_meters[i].ticks > m_flow_meters[i].update_ticks)
         {
             /* TODO: Delete debug statements */
             printf("Flow meter %d at ticks %d \n", i, m_flow_meters[i].ticks);
@@ -187,22 +204,20 @@ bool db_access::update()
 bool db_access::clear(unsigned int tap)
 {
     /* Check bounds first */
-    /* Note: Using Unsigned, so only one case; no negatives */
     if(tap > m_num_taps)
         return false;
 
-    m_flow_meters[tap-1].ticks = 0;
+    m_flow_meters[tap].ticks = 0;
     return true;
 }
 
 int db_access::access(unsigned int tap)
 {
     /* Check bounds first */
-    /* Note: Using Unsigned, so only one case; no negatives */
     if(tap > m_num_taps)
         return 0;
 
-    return m_flow_meters[tap-1].ticks;
+    return m_flow_meters[tap].ticks;
 }
 
 void db_access::print()
@@ -260,7 +275,6 @@ bool db_access::archive()
 
     return true;
 }
-
 
 static void prompt_pass(string& str) {
     char* pass = getpass("Enter Password: ");

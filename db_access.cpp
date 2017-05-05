@@ -135,6 +135,7 @@ bool db_access::init_mysql(const char* host, const char* database,
   m_stmt = m_conn->createStatement();
   return true;
 }
+
 db_access::~db_access()
 {
   delete(m_conn);
@@ -144,6 +145,7 @@ db_access::~db_access()
   delete(m_res);
   delete(m_flow_meters);
 }
+
 bool db_access::add(unsigned int tap, int value)
 {
   /* Check bounds first */

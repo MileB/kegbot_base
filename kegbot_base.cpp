@@ -10,14 +10,9 @@
 
 #include "kegbot_base.h"
 
-int Previous_Pulses[NUM_METERS] = {0};
-int Current_Pulse[NUM_METERS]   = {0};
-
-/* Count will loop through
- * all possible control signals */
-uint8_t count;
-
-bool shutdown;
+/* Global boolean to manage CTRL+C 
+ * or SIGINT exit condition */
+static bool shutdown;
 
 int main (){
 
@@ -44,12 +39,15 @@ int main (){
   pinMode(M1, OUTPUT);
   pinMode(M2, OUTPUT);
 
-  /* Count will loop through
-   * all possible control signals */
-  count = 0;
-
   std::thread active_runner (active_thread);
   std::thread archive_runner(archive_thread);
+
+  /* Count will loop through
+   * all possible control signals */
+  uint8_t count = 0;
+  int Previous_Pulses [NUM_METERS] = {0};
+  int Current_Pulse   [NUM_METERS] = {0};
+
 
   while(!shutdown){
 
@@ -64,15 +62,18 @@ int main (){
     digitalWrite(M1, count & 0x02);
     digitalWrite(M2, count & 0x04);
 
+    /* Sleep used to needlessly maxing out the CPU.
+     * Sleep placed here to allow the multiplexer
+     * signals to settle before polling */
     nanosleep(&PIN_SLEEP_TIME, NULL);
 
-    /* Check store last pulse results in previous pulse
+    /* Check / store last pulse results in previous pulse
      * Used to find edges of the signals */
+    /* Read from Flow_Meter 1 */
     Previous_Pulses[count] = Current_Pulse[count];
     Current_Pulse[count] = digitalRead(Flow_Meter1);
 
     /* Read from Flow_Meter 2 */
-
     Previous_Pulses[count+8] = Current_Pulse[count+8];
     Current_Pulse[count+8] = digitalRead(Flow_Meter2);
 
@@ -85,6 +86,7 @@ int main (){
     if ((Current_Pulse[count+8] == 0)&&(Previous_Pulses[count+8] == 1)){
       db.add(count+8, 1); 
     }
+
     count++;
   }
 
@@ -106,7 +108,6 @@ void sig_handler(int signo)
 void archive_thread(void)
 {
   struct timespec active_sleep = db.get_active_rate();
-
   while(!shutdown)
   {
     nanosleep(&active_sleep, NULL);

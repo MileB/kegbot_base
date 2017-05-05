@@ -107,20 +107,20 @@ void sig_handler(int signo)
 
 void archive_thread(void)
 {
-  struct timespec active_sleep = db.get_active_rate();
+  struct timespec archive_sleep = db.get_archive_rate();
   while(!shutdown)
   {
-    nanosleep(&active_sleep, NULL);
+    nanosleep(&archive_sleep, NULL);
     db.update(false);
   }
 }
 
 void active_thread(void)
 {
-  struct timespec archive_sleep = db.get_archive_rate();
+  struct timespec active_sleep = db.get_active_rate();
   while(!shutdown)
   {
-    nanosleep(&archive_sleep, NULL);
+    nanosleep(&active_sleep, NULL);
     db.archive();
   }
 }

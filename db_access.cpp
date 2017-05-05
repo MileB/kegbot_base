@@ -108,7 +108,7 @@ db_access::db_access(const char* filename)
     }
     m_active_rate.tv_sec    = static_cast<time_t> ((int)active_rate);
     m_active_rate.tv_nsec   = static_cast<long>   (fmod(active_rate, 1) * NS_TO_S);
-    m_archive_rate.tv_sec   = static_cast<time_t> ((int)active_rate);
+    m_archive_rate.tv_sec   = static_cast<time_t> ((int)archive_rate);
     m_archive_rate.tv_nsec  = static_cast<long>   (fmod(archive_rate, 1) * NS_TO_S);
   }
 }

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <unordered_map>
+#include <syslog.h>
 
 using std::string;
 using std::unordered_map;
@@ -11,6 +12,9 @@ using std::unordered_map;
 class config_parser{
     public:
       config_parser(const char* filename);
+
+      bool isSafe() 
+        { return m_safe; }
 
       /* Func: getInt, getDouble, getString
        * Takes in key from provided file
@@ -31,5 +35,6 @@ class config_parser{
     private:
       void fill_dict(const char* filename);
       unordered_map <string, string>  m_dict;
+      bool m_safe;
 };
 #endif

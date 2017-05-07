@@ -7,8 +7,8 @@
 void strip(string& str);
 
 config_parser::config_parser(const char* filename)
+  : m_safe(false)
 {
-  printf("In constructor...");
   fill_dict(filename);
 }
 
@@ -47,6 +47,10 @@ void config_parser::fill_dict(const char* filename)
       key.clear();
       value.clear();
     }
+    m_safe = true;
+  }
+  else {
+    syslog(LOG_ERR, "Could not open file %s", filename);
   }
 }
 

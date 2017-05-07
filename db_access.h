@@ -8,7 +8,8 @@
 #include <cppconn/statement.h>
 #include <cppconn/prepared_statement.h>
 
-#include <string.h>
+#include <mutex>
+#include <string>
 #include <unistd.h>
 #include <math.h>
 #include <time.h>
@@ -20,7 +21,7 @@ static const double DEFAULT_FLOW_TPG      = 10313.0;
 static const double DEFAULT_UPDATE_OZ     = 1.0;
 static const double DEFAULT_ACTIVE_RATE   = 1.0;
 static const double DEFAULT_ARCHIVE_RATE  = 30.0;
-static const double NS_TO_S  = 1000000000.0;
+static const double S_TO_MS               = 1000.0;
 
 class db_access{
     public:
@@ -52,10 +53,7 @@ class db_access{
          * be needed */
         bool clear(unsigned int tap);
 
-        /* Func: clear_db
-         * !DANGEROUS!
-         * This will zero out all ticks on the active DATABASE
-         * This does not clear any local accrue'd ticks */
+        /* Func: clear_db !DANGEROUS!  This will zero out all ticks on the active DATABASE This does not clear any local accrue'd ticks */
         bool clear_db();
 
         /* TODO
@@ -74,16 +72,22 @@ class db_access{
         void print();
 
         /* TODO: Write these */
-        timespec get_archive_rate() { return m_archive_rate; }
-        timespec get_active_rate()  { return m_active_rate;  }
+        int get_archive_rate() { return m_archive_rate; }
+        int get_active_rate()  { return m_active_rate;  }
+        bool is_safe()         { return m_safe; }
 
     private:
         bool init_mysql(const char* host, const char* database,
                            const char* user, const char* pass );
-        int                 UPDATE_THRESHOLD_TICKS;
+
+        bool load_config( string& host, string& database,
+                            string& user, string& pass );
+
+        bool                m_safe;
         unsigned int        m_num_taps;
-        struct timespec     m_archive_rate;
-        struct timespec     m_active_rate;
+        std::mutex          m_lock;
+        int                 m_archive_rate;
+        int                 m_active_rate;
         flow_meter*         m_flow_meters;
         config_parser       m_config;
         sql::Driver*        m_driver;

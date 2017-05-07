@@ -10,16 +10,51 @@
 
 #include "kegbot_base.h"
 
-/* Global boolean to manage CTRL+C 
- * or SIGINT exit condition */
-static bool shutdown;
+static std::condition_variable cv;
+static std::mutex cv_m;
+static bool shutdown = false;
 
 int main (){
 
-  /* Set up CTRL+C sigint interrupt handler */
+  /* Set up SIGTERM interrupt handler */
   shutdown = false;
-  if (signal(SIGINT, sig_handler) == SIG_ERR)
-    printf("WARNING! Cannot catch SIGINT. CTRL+C will not flush ticks before exit\n");
+  if (signal(SIGTERM, sig_handler) == SIG_ERR)
+    syslog(LOG_WARNING,"Cannot catch SIGTERM. Will not be able to" 
+        "flush ticks before exit");
+
+  if (!db.is_safe()) {
+    syslog(LOG_ERR, "Database Access couldn't start!");
+    return -1;
+  }
+
+  /* Spawn off helper threads */
+  std::thread active_runner (active_thread);
+  std::thread archive_runner(archive_thread);
+  std::thread sensor_runner (sensor_thread);
+
+  active_runner.join();
+  archive_runner.join();
+  sensor_runner.join();
+  syslog(LOG_INFO, "Shutdown complete");
+  return 0;
+}
+
+void sig_handler(int signo)
+{
+  if (signo == SIGTERM){
+    syslog(LOG_INFO, "SIGTERM Caught, performing clean exit...");
+    std::unique_lock<std::mutex> lock (cv_m);
+    shutdown = true;
+    cv.notify_all();
+  }
+}
+
+void sensor_thread(void)
+{
+  /* Count will loop through
+   * all possible control signals */
+  uint8_t count = 0;
+  std::unique_lock<std::mutex> lock (cv_m);
 
   wiringPiSetupGpio();
 
@@ -39,17 +74,12 @@ int main (){
   pinMode(M1, OUTPUT);
   pinMode(M2, OUTPUT);
 
-  std::thread active_runner (active_thread);
-  std::thread archive_runner(archive_thread);
-
-  /* Count will loop through
-   * all possible control signals */
-  uint8_t count = 0;
+  /* Keep track of current a past pulses
+   * to catch falling edge conditions */
   int Previous_Pulses [NUM_METERS] = {0};
   int Current_Pulse   [NUM_METERS] = {0};
 
-
-  while(!shutdown){
+  while (!shutdown) {
 
     /* Overflow, reset count */
     if (count > 7){
@@ -62,10 +92,9 @@ int main (){
     digitalWrite(M1, count & 0x02);
     digitalWrite(M2, count & 0x04);
 
-    /* Sleep used to needlessly maxing out the CPU.
-     * Sleep placed here to allow the multiplexer
+    /* Sleep placed here to allow the multiplexer
      * signals to settle before polling */
-    nanosleep(&PIN_SLEEP_TIME, NULL);
+    cv.wait_for(lock, std::chrono::nanoseconds(PIN_RATE_NS));
 
     /* Check / store last pulse results in previous pulse
      * Used to find edges of the signals */
@@ -89,38 +118,27 @@ int main (){
 
     count++;
   }
-
-  return 0;
-}
-
-void sig_handler(int signo)
-{
-  if (signo == SIGINT)
-  {
-    printf("SIGINT Caught, flushing ticks\n");
-    db.update(true);
-    db.archive();
-    printf("Finished flushing database, shutting down\n");
-    shutdown = true;
-  }
 }
 
 void archive_thread(void)
 {
-  struct timespec archive_sleep = db.get_archive_rate();
-  while(!shutdown)
-  {
-    nanosleep(&archive_sleep, NULL);
-    db.update(false);
+  std::unique_lock<std::mutex> lock (cv_m);
+  const int sleep_ms = db.get_archive_rate();
+
+  while (!shutdown) {
+    cv.wait_for(lock, std::chrono::milliseconds(sleep_ms));
+    syslog(LOG_INFO, "Updating Archive");
+    db.archive();
   }
 }
 
 void active_thread(void)
 {
-  struct timespec active_sleep = db.get_active_rate();
-  while(!shutdown)
-  {
-    nanosleep(&active_sleep, NULL);
-    db.archive();
+  std::unique_lock<std::mutex> lock (cv_m);
+  const int sleep_ms = db.get_active_rate();
+
+  while (!shutdown) {
+    cv.wait_for(lock, std::chrono::milliseconds(sleep_ms));
+    db.update(false);
   }
 }

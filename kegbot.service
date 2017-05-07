@@ -1,0 +1,10 @@
+[Unit]
+Description=service_description
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/kegbot_base.out
+Type=simple
+
+[Install]
+WantedBy=default.target

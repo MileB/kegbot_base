@@ -4,8 +4,23 @@
 
 static void prompt_pass(string& str);
 
+/* ----------------------------------------------
+ * Func: constructor
+ * Instantiates the config parser class m_config
+ * via the provided file name.
+ * If still in a safe state, then runs the 
+ * init_mysql function to connect to the database
+ * ----------------------------------------------*/
 db_access::db_access(const char* filename) 
-  : m_safe(false), m_config(filename)
+  : m_safe(false), 
+    m_config(filename),
+    m_flow_meters(NULL),
+    m_driver(NULL),
+    m_conn(NULL),
+    m_stmt(NULL),
+    m_res(NULL),
+    m_pushactive(NULL),
+    m_pusharchive(NULL)
 {
   m_safe = m_config.isSafe();
 
@@ -22,6 +37,206 @@ db_access::db_access(const char* filename)
   }
 }
 
+/* --------------------------------------------
+ * Func: deconstructor
+ * Deletes all dynamically allocated variables 
+ * --------------------------------------------*/
+db_access::~db_access()
+{
+  if (m_flow_meters != NULL)
+    delete[] m_flow_meters;
+  if (m_stmt != NULL)
+    delete m_stmt;
+  if (m_pushactive != NULL)
+    delete m_pushactive;
+  if (m_pusharchive != NULL)
+    delete m_pusharchive;
+  if (m_conn != NULL)
+    delete m_conn;
+  if (m_res != NULL)
+    delete m_res;
+}
+
+/* ------------------------------------------
+ * Func: add
+ * Adds value to ticks accrued at index tap 
+ * ------------------------------------------*/
+bool db_access::add(unsigned int tap, int value)
+{
+  /* Check bounds first */
+  /* Note: Using Unsigned, so only one case; no negatives */
+  if(tap >= m_num_taps)
+    return false;
+
+  m_flow_meters[tap].ticks += value;
+  return true;
+}
+
+/* ---------------------------------------
+ * Func: update
+ * Updates DB with all accrue'd flow ticks 
+ * Then zero's out local flow ticks array 
+ * Unless force is set the ticks must be
+ * above a threshold to update 
+ * -------------------------------------*/
+bool db_access::update(bool force)
+{
+  bool retval = true;
+  for(unsigned int i = 0; i < m_num_taps; i++)
+  {
+    /* Update flow meters if they've accrued enough ticks 
+     * Or if the request was forced and it's nonzero */
+    if( (force && m_flow_meters[i].ticks > 0)
+        || m_flow_meters[i].ticks > m_flow_meters[i].update_ticks)
+    {
+      try {
+        /* First acquire mutex before attempting to update active table */
+        std::lock_guard<std::mutex> guard (m_lock);
+
+        /* SET ticks = ticks + ? */
+        /* Update ticks to add the new value accumulated */
+        m_pushactive->setInt(1, m_flow_meters[i].ticks);
+
+        /* SET volremaining=(41+size*83)-(ticks*8.0/?) */
+        /* Update volremaining to be ...
+         * totalvolume (41 or 124 pints) - (Pints counted from ticks) */
+        m_pushactive->setInt(2, m_flow_meters[i].tpg);
+
+        /* WHERE tap = i+1 */
+        /* C-code stores these as 0-indexed, [15:0] but db has [16:1] */
+        m_pushactive->setInt(3, i+1);
+
+        /* Sets dirty bit on any values updated */
+        m_pushactive->execute();
+
+        /* Clear our accumulator */
+        m_flow_meters[i].ticks = 0;
+
+        /* Mutex m_lock implicitly free'd */
+      }
+      catch (sql::SQLException &e) {
+        syslog(LOG_ERR, "Could not push to Active. (MySQL Error Code %d)", 
+            e.getErrorCode());
+        retval = false;
+      }
+    }
+  }
+  return retval;
+} 
+
+/* --------------------------------------------
+ * Func: clear
+ * Sets accrued flow ticks of one local index
+ * back to zero. Use case yet unknown, but may
+ * be needed 
+ * ------------------------------------------*/
+bool db_access::clear(unsigned int tap)
+{
+  /* Check bounds first */
+  if(tap >= m_num_taps)
+    return false;
+
+  m_flow_meters[tap].ticks = 0;
+  return true;
+}
+
+/* -----------------------------------
+ * Func: clear_db 
+ * This will zero out all ticks on the 
+ * active DATABASE This does not clear 
+ * any local accrue'd ticks 
+ * ----------------------------------*/
+bool db_access::clear_db()
+{
+  bool retval = true;
+  /* First acquire mutex before running query */
+  std::lock_guard<std::mutex> guard (m_lock);
+
+  try {
+  m_res = m_stmt->executeQuery("UPDATE active SET ticks = 0");
+  }
+  catch (sql::SQLException &e) {
+    syslog(LOG_ERR, "Could not connect to database. (MySQL Error Code %d)", 
+        e.getErrorCode());
+    retval = false;
+  }
+
+  if (m_res != NULL)
+    delete m_res;
+
+  return retval;
+  /* Mutex m_lock implicitly free'd */
+}
+
+/* ------------------------------------------------
+ * Func: archive: 
+ * Copies off all rows from active that have their
+ * dirty bit set to archive. Returns TRUE if there
+ * were no exceptions. Returns FALSE if any 
+ * exceptions caught. 
+ * -----------------------------------------------*/
+bool db_access::archive()
+{
+  bool retval=true;
+  /* First acquire mutex before attempting to update archive table */
+  std::lock_guard<std::mutex> guard (m_lock);
+
+  try {
+    /* Push to archive those that have been marked as dirty */
+    m_res = m_stmt->executeQuery("SELECT ontap,name,size,volremaining "
+        "FROM active WHERE dirty=1");
+    int ontap;
+    std::string name;
+    int size;
+    double volremaining;
+    while(m_res->next())
+    {
+      ontap = m_res->getInt("ontap");
+      name = m_res->getString("name");
+      size = m_res->getInt("size");
+      volremaining = m_res->getDouble("volremaining");
+
+      m_pusharchive->setString(1, name);
+      m_pusharchive->setInt(2, ontap);
+      m_pusharchive->setInt(3, size);
+      m_pusharchive->setDouble(4, volremaining);
+
+      m_pusharchive->execute();
+    }
+  }
+  catch (sql::SQLException &e) {
+    syslog(LOG_ERR, "Could not push to Archive. (MySQL Error Code %d)", 
+        e.getErrorCode());
+    retval = false;
+  }
+  if (m_res != NULL)
+    delete m_res;
+
+  return retval;
+  /* Mutex m_lock implicitly free'd */
+}
+
+/* ------------------------------------------------
+ * Func: access
+ * Returns the current accrued ticks at index tap
+ * Note this is just the value since last update() 
+ * -----------------------------------------------*/
+int db_access::access(unsigned int tap)
+{
+  /* Check bounds first */
+  if(tap >= m_num_taps)
+    return 0;
+
+  return m_flow_meters[tap].ticks;
+}
+
+/* ------------------------------------------
+ * Func: load_config
+ * Once config_parser has been created, this
+ * function will be able to pull all desired
+ * configuration items and store them where
+ * appropriate 
+ * -----------------------------------------*/
 bool db_access::load_config( string& host, string& database,
     string& user, string& pass )
 {
@@ -133,8 +348,45 @@ bool db_access::load_config( string& host, string& database,
   return success;
 }
 
-/* ---------------------------------------------------------------- */
+/* -------------------------------------------
+ * Func: Print
+ * Prints to stdout the current format of the 
+ * active table. Also works as a simple 
+ * example for fetching values 
+ * -----------------------------------------*/
+void db_access::print()
+{
+  /* First acquire mutex before running query */
+  std::lock_guard<std::mutex> guard (m_lock);
 
+  try {
+    m_res = m_stmt->executeQuery("SELECT * FROM active");
+    while(m_res->next())
+    {
+      std::cout << " ontap: " << m_res->getString("ontap");
+      std::cout << " name: " << m_res->getString("name");
+      std::cout << " ticks: " << m_res->getString("ticks");
+      std::cout << " size: " << m_res->getString("size");
+      std::cout << " volremaining: " << m_res->getString("volremaining");
+      std::cout << " dirty: " << m_res->getString("dirty");
+      std::cout << "\n";
+    }
+  }
+  catch (sql::SQLException &e) {
+    syslog(LOG_ERR, "Could not connect to database. (MySQL Error Code %d)", 
+        e.getErrorCode());
+  }
+  if (m_res != NULL)
+    delete m_res;
+  /* Mutex m_lock implicitly free'd */
+}
+
+/* ------------------------------------------
+ * Func: init_mysql
+ * Initializes the connection to the desired
+ * host and database. Initializes all common
+ * SQL Types for the class as well 
+ * ----------------------------------------*/
 bool db_access::init_mysql(const char* host, const char* database,
     const char* user, const char* pass )
 {
@@ -165,180 +417,10 @@ bool db_access::init_mysql(const char* host, const char* database,
   return retval;
 }
 
-db_access::~db_access()
-{
-  /* TODO: Fix this deconstructor */
-  //delete(m_conn);
-  //delete(m_pushactive);
-  //delete(m_pusharchive);
-  //delete(m_stmt);
-  //delete(m_res);
-  //delete(m_flow_meters);
-}
 
-bool db_access::add(unsigned int tap, int value)
-{
-  /* Check bounds first */
-  /* Note: Using Unsigned, so only one case; no negatives */
-  if(tap > m_num_taps)
-    return false;
 
-  m_flow_meters[tap].ticks += value;
-  return true;
-}
 
-bool db_access::update(bool force)
-{
-  bool retval = true;
-  for(unsigned int i = 0; i < m_num_taps; i++)
-  {
-    /* Update flow meters if they've accrued enough ticks */
-    if( (force && m_flow_meters[i].ticks > 0)
-        || m_flow_meters[i].ticks > m_flow_meters[i].update_ticks)
-    {
-      try {
-        /* First acquire mutex before attempting to update active table */
-        std::lock_guard<std::mutex> guard (m_lock);
 
-        /* SET ticks = ticks + ? */
-        /* Update ticks to add the new value accumulated */
-        m_pushactive->setInt(1, m_flow_meters[i].ticks);
-
-        /* SET volremaining=(41+size*83)-(ticks*8.0/?) */
-        /* Update volremaining to be ...
-         * totalvolume (41 or 124 pints) - (Pints counted from ticks) */
-        m_pushactive->setInt(2, m_flow_meters[i].tpg);
-
-        /* WHERE tap = i+1 */
-        /* C-code stores these as 0-indexed, [15:0] but db has [16:1] */
-        m_pushactive->setInt(3, i+1);
-
-        /* Sets dirty bit on any values updated */
-        m_pushactive->execute();
-
-        /* Clear our accumulator */
-        m_flow_meters[i].ticks = 0;
-
-        /* Mutex m_lock implicitly free'd */
-      }
-      catch (sql::SQLException &e) {
-        syslog(LOG_ERR, "Could not push to Active. (MySQL Error Code %d)", 
-            e.getErrorCode());
-        retval = false;
-      }
-    }
-  }
-  return retval;
-}
-
-bool db_access::clear(unsigned int tap)
-{
-  /* Check bounds first */
-  if(tap > m_num_taps)
-    return false;
-
-  m_flow_meters[tap].ticks = 0;
-  return true;
-}
-
-int db_access::access(unsigned int tap)
-{
-  /* Check bounds first */
-  if(tap > m_num_taps)
-    return 0;
-
-  return m_flow_meters[tap].ticks;
-}
-
-void db_access::print()
-{
-  /* First acquire mutex before running query */
-  std::lock_guard<std::mutex> guard (m_lock);
-
-  try {
-    m_res = m_stmt->executeQuery("SELECT * FROM active");
-    while(m_res->next())
-    {
-      std::cout << " ontap: " << m_res->getString("ontap");
-      std::cout << " name: " << m_res->getString("name");
-      std::cout << " ticks: " << m_res->getString("ticks");
-      std::cout << " size: " << m_res->getString("size");
-      std::cout << " volremaining: " << m_res->getString("volremaining");
-      std::cout << " dirty: " << m_res->getString("dirty");
-      std::cout << "\n";
-    }
-  }
-  catch (sql::SQLException &e) {
-    syslog(LOG_ERR, "Could not connect to database. (MySQL Error Code %d)", 
-        e.getErrorCode());
-  }
-  if (m_res != NULL)
-    delete m_res;
-  /* Mutex m_lock implicitly free'd */
-}
-
-bool db_access::clear_db()
-{
-  bool retval = true;
-  /* First acquire mutex before running query */
-  std::lock_guard<std::mutex> guard (m_lock);
-
-  try {
-  m_res = m_stmt->executeQuery("UPDATE active SET ticks = 0");
-  }
-  catch (sql::SQLException &e) {
-    syslog(LOG_ERR, "Could not connect to database. (MySQL Error Code %d)", 
-        e.getErrorCode());
-    retval = false;
-  }
-
-  if (m_res != NULL)
-    delete m_res;
-
-  return retval;
-  /* Mutex m_lock implicitly free'd */
-}
-
-bool db_access::archive()
-{
-  bool retval=true;
-  /* First acquire mutex before attempting to update archive table */
-  std::lock_guard<std::mutex> guard (m_lock);
-
-  try {
-    /* Push to archive those that have been marked as dirty */
-    m_res = m_stmt->executeQuery("SELECT ontap,name,size,volremaining "
-        "FROM active WHERE dirty=1");
-    int ontap;
-    std::string name;
-    int size;
-    double volremaining;
-    while(m_res->next())
-    {
-      ontap = m_res->getInt("ontap");
-      name = m_res->getString("name");
-      size = m_res->getInt("size");
-      volremaining = m_res->getDouble("volremaining");
-
-      m_pusharchive->setString(1, name);
-      m_pusharchive->setInt(2, ontap);
-      m_pusharchive->setInt(3, size);
-      m_pusharchive->setDouble(4, volremaining);
-
-      m_pusharchive->execute();
-    }
-  }
-  catch (sql::SQLException &e) {
-    syslog(LOG_ERR, "Could not push to Archive. (MySQL Error Code %d)", 
-        e.getErrorCode());
-    retval = false;
-  }
-  if (m_res != NULL)
-    delete m_res;
-
-  return retval;
-  /* Mutex m_lock implicitly free'd */
-}
 
 static void prompt_pass(string& str) {
   char* pass = getpass("Enter Password: ");

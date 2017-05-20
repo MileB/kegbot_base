@@ -1,13 +1,17 @@
+# Simple Makefile for Kegbot code
+# Note: Requires these packages:
+#  libmysqlcppconn-dev
+#  wiringpi
 
-TARGET=kegbot_base
+TARGET=kegbot
 CXX=g++
 
 LXXFLAGS=-lwiringPi -lwiringPiDev `mysql_config --libs` -lmysqlcppconn
 CXXFLAGS=-Wall -g -std=c++11 -pthread `mysql_config --cflags` -I/usr/include/cppconn
-ALLOBJ=kegbot_base.o db_access.o config_parser.o base64.o
+ALLOBJ=kegbot.o db_access.o config_parser.o base64.o
 
-$(TARGET).out: $(ALLOBJ)
-	$(CXX) $(ALLOBJ) $(LXXFLAGS) -o $(TARGET).out
+$(TARGET): $(ALLOBJ)
+	$(CXX) $(ALLOBJ) $(LXXFLAGS) -o $(TARGET)
 
 $(TARGET).o: $(TARGET).cpp db_access.o
 	$(CXX) $(CXXFLAGS) -c $(TARGET).cpp
@@ -18,22 +22,16 @@ config_parser.o: config_parser.cpp
 
 base_64.o: base64.cpp
 
-kegbot_base.o: kegbot_base.cpp db_access.o
-
 .PHONY: clean cleaner
 
 clean:
-	rm -rf *.o
+	rm -f *.o
 
 cleaner: clean
-	rm -rf ./$(TARGET).out
+	rm -f $(TARGET)
 
-run: $(TARGET).out
-	./$(TARGET).out
+run: $(TARGET)
+	./$(TARGET)
 
-debug: $(TARGET).out
-	gdb -tui ./$(TARGET).out 
-	
-#Sam was here
-#Yue was not here
-#Michael was sometimes here
+debug: $(TARGET)
+	gdb -tui ./$(TARGET)

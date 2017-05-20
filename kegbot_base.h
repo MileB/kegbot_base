@@ -7,6 +7,7 @@
 #include <syslog.h>
 #include <signal.h>
 #include <thread>
+#include <wiringPi.h>
 #include "db_access.h"
 
 //-----------------
